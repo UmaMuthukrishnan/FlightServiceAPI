@@ -45,38 +45,35 @@ public class FlightServiceImpl implements FlightService {
 	private final RestTemplate restTemplate;
 
 	@Autowired
-	public FlightServiceImpl(AuthorizationService authorizationService,RestTemplateBuilder restTemplateBuilder) {
+	public FlightServiceImpl(AuthorizationService authorizationService, RestTemplateBuilder restTemplateBuilder) {
 		this.authorizationService = authorizationService;
-		this.restTemplate=restTemplateBuilder.build();
+		this.restTemplate = restTemplateBuilder.build();
 
 	}
 
 	@Override
 	@Async
-	public CompletableFuture<String> getAllAirportDetails() {
+	public CompletableFuture<String> getAllAirportDetails() throws InterruptedException {
 		log.info("getAllAirportDetails :: START {} ", LocalDateTime.now());
 		return getMockServiceResponse(airportsURL, null);
 
 	}
-	 @Async("asyncExecutor")
-	private CompletableFuture<String> getMockServiceResponse(String url, String key) {
-		 
-		 log.info("getMockServiceResponse :: START {} ", LocalDateTime.now());
-		 long startTime = System.currentTimeMillis();
-		 String response = null;
-		try {
-			String accessTokenAsString = authorizationService.getAccessToken();
-			HttpHeaders headers = new HttpHeaders();
-			headers.setContentType(MediaType.APPLICATION_JSON);
-			headers.set("Authorization", "Bearer " + accessTokenAsString);
-			HttpEntity<String> entity = new HttpEntity<>(headers);
-			response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class, key).getBody();
-			Thread.sleep(1000L);
-		} catch (Exception ex) {
-			log.error("Exception in getting getMockServiceResponse " + ex.getMessage());
-		}
+
+	@Async("asyncExecutor")
+	private CompletableFuture<String> getMockServiceResponse(String url, String key) throws InterruptedException {
+
+		log.info("getMockServiceResponse :: START {} ", LocalDateTime.now());
+		long startTime = System.currentTimeMillis();
+		String response = null;
+		String accessTokenAsString = authorizationService.getAccessToken();
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("Authorization", "Bearer " + accessTokenAsString);
+		HttpEntity<String> entity = new HttpEntity<>(headers);
+		response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class, key).getBody();
+		Thread.sleep(1000L);
 		long endTime = System.currentTimeMillis();
-		double time = (endTime - startTime) / 1000.000;	
+		double time = (endTime - startTime) / 1000.000;
 		log.info("getMockServiceResponse :: END time: {} seconds", time);
 		return CompletableFuture.completedFuture(response);
 
@@ -84,54 +81,44 @@ public class FlightServiceImpl implements FlightService {
 
 	@Override
 	@Async("asyncExecutor")
-	public CompletableFuture<String> getSelectedAirportDetails(String key) {
+	public CompletableFuture<String> getSelectedAirportDetails(String key) throws InterruptedException {
 		log.info("getSelectedAirportDetails :: START {} ", LocalDateTime.now());
 		return getMockServiceResponse(airportSpecificURL, key);
 	}
 
 	@Override
 	@Async("asyncExecutor")
-	public CompletableFuture<FlightFareResponse> getFlightFareDetails(String origin, String dest, String currency) {
+	public CompletableFuture<FlightFareResponse> getFlightFareDetails(String origin, String dest, String currency)
+			throws Exception {
 		log.info("getFlightFareDetails :: START {} ", LocalDateTime.now());
 		long startTime = System.currentTimeMillis();
 		Map<String, Object> originMap = new HashMap<>();
 		Map<String, Object> destMap = new HashMap<>();
 
 		FlightFareResponse flightFareResponse = null;
+		ObjectMapper mapper = new ObjectMapper();
+		JsonNode input = mapper.readTree(getAllAirportDetails().get());
+		JsonNode array = input.get("_embedded").get("locations");
 
-		try {
-			ObjectMapper mapper = new ObjectMapper();
-			JsonNode input = mapper.readTree(getAllAirportDetails().get());
-			JsonNode array = input.get("_embedded").get("locations");
+		array.forEach(element -> {
+			JsonNode code = element.get("code");
+			if (code.asText().equalsIgnoreCase(origin)) {
+				originMap.put("originDetails", element);
+			}
 
-			array.forEach(element -> {
-				JsonNode code = element.get("code");
-				if (code.asText().equalsIgnoreCase(origin)) {
-					originMap.put("originDetails", element);
-				}
-
-				if (code.asText().equalsIgnoreCase(dest)) {
-					destMap.put("destDetails", element);
-				}
-			});
-			Thread.sleep(ThreadLocalRandom.current().nextLong(1000, 6000));
-			BigDecimal fare = BigDecimal.valueOf(ThreadLocalRandom.current().nextDouble(100, 3500)).setScale(2,
-					HALF_UP);
-			flightFareResponse = FlightFareResponse.builder().amount(fare.doubleValue()).origin(originMap)
-					.destination(destMap).currency(currency.toUpperCase()).build();
-			Thread.sleep(1000L);
-		}
-
-		catch (Exception ex) {
-			log.error("Exception in getting getFlightFareDetails " + ex.getMessage());
-		}
-		
+			if (code.asText().equalsIgnoreCase(dest)) {
+				destMap.put("destDetails", element);
+			}
+		});
+		Thread.sleep(ThreadLocalRandom.current().nextLong(1000, 6000));
+		BigDecimal fare = BigDecimal.valueOf(ThreadLocalRandom.current().nextDouble(100, 3500)).setScale(2, HALF_UP);
+		flightFareResponse = FlightFareResponse.builder().amount(fare.doubleValue()).origin(originMap)
+				.destination(destMap).currency(currency.toUpperCase()).build();
+		Thread.sleep(1000L);
 		long endTime = System.currentTimeMillis();
-		double time = (endTime - startTime) / 1000.000;	
+		double time = (endTime - startTime) / 1000.000;
 		log.info("getFlightFareDetails :: END time: {} seconds", time);
 		return CompletableFuture.completedFuture(flightFareResponse);
-		
-		
 
 	}
 

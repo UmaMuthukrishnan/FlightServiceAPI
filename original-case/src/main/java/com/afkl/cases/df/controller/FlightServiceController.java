@@ -1,7 +1,5 @@
 package com.afkl.cases.df.controller;
 
-import java.io.IOException;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
@@ -15,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import com.afkl.cases.df.model.FlightServiceResponse;
+import com.afkl.cases.df.common.exceptions.FlightServiceNotFoundException;
 import com.afkl.cases.df.model.FinalFlightServiceResponse;
 import com.afkl.cases.df.model.FlightFareResponse;
 import com.afkl.cases.df.service.FlightService;
@@ -39,8 +38,11 @@ public class FlightServiceController {
 	public ResponseEntity<String> getAllAirportDetails() throws InterruptedException, ExecutionException {
 
 		String response = flightService.getAllAirportDetails().get();
-		return Optional.of(response).map(u -> new ResponseEntity<>(response, HttpStatus.OK))
-				.orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+		if (response == null) {
+			throw new FlightServiceNotFoundException("Service Not found");
+		}
+
+		return new ResponseEntity<>(response, HttpStatus.OK);
 	}
 
 	@GetMapping(value = "/airports/{key}", produces = { MediaType.APPLICATION_JSON_VALUE })
@@ -48,30 +50,37 @@ public class FlightServiceController {
 			throws InterruptedException, ExecutionException {
 
 		String response = flightService.getSelectedAirportDetails(key).get();
-		return Optional.of(response).map(u -> new ResponseEntity<>(response, HttpStatus.OK))
-				.orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+
+		if (response == null) {
+			throw new FlightServiceNotFoundException("Airport ID " + key + " details Not found");
+		}
+		return new ResponseEntity<>(response, HttpStatus.OK);
 	}
 
 	@GetMapping(value = "/fares/{origin}/{dest}", produces = { MediaType.APPLICATION_JSON_VALUE })
 	public ResponseEntity<FlightFareResponse> getFareDetails(@PathVariable("origin") String origin,
 			@PathVariable("dest") String dest, @RequestParam(value = "currency", defaultValue = "EUR") String currency)
-			throws InterruptedException, ExecutionException {
+			throws Exception {
 		FlightFareResponse response = flightService.getFlightFareDetails(origin, dest, currency).get();
-		return Optional.of(response).map(u -> new ResponseEntity<>(response, HttpStatus.OK))
-				.orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+		if (response == null) {
+			throw new FlightServiceNotFoundException("FlightFareResponse Not found");
+		}
+		return new ResponseEntity<>(response, HttpStatus.OK);
 	}
 
 	@GetMapping(value = "/calculateStatistics", produces = { MediaType.APPLICATION_JSON_VALUE })
 	public ResponseEntity<FlightServiceResponse> calculateStatistics() {
 		FlightServiceResponse response = flightServiceStatistics.calculateStatistics();
-		return Optional.of(response).map(u -> new ResponseEntity<>(response, HttpStatus.OK))
-				.orElse(new ResponseEntity<>(HttpStatus.NOT_FOUND));
+		if (response == null) {
+			throw new FlightServiceNotFoundException("Statistics Not found");
+		}
+		return new ResponseEntity<>(response, HttpStatus.OK);
 	}
 
 	@GetMapping(value = "/runAsynch", produces = { MediaType.APPLICATION_JSON_VALUE })
 	public FinalFlightServiceResponse testAsynch(@RequestParam String key, @RequestParam String origin,
 			@RequestParam String dest, @RequestParam(value = "currency", defaultValue = "EUR") String currency)
-			throws InterruptedException, ExecutionException, IOException {
+			throws Exception {
 		CompletableFuture<String> allAirportDetails = flightService.getAllAirportDetails();
 		CompletableFuture<String> airportDetails = flightService.getSelectedAirportDetails(key);
 		CompletableFuture<FlightFareResponse> flightFare = flightService.getFlightFareDetails(origin, dest, currency);
